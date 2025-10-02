@@ -1,0 +1,106 @@
+pipeline {
+    agent {
+        dockerfile {
+            filename 'Dockerfile'
+            args '-v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker'
+        }
+    }
+    
+    environment {
+        
+        DOCKER_REGISTRY_URL = 'https://index.docker.io/v1/' 
+        DOCKER_IMAGE_NAME     = 'rulyw/testass2'            
+        DOCKER_IMAGE_TAG        = "build-${env.BUILD_NUMBER}"
+
+        DOCKER_REGISTRY_CRED = credentials('0a521f0a-aba4-458b-98b0-8166149666c8')        
+        DOCKER_HOST = 'tcp://docker:2376'
+    }
+
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Install dependencies') {
+            steps {
+                sh 'npm install --save'
+                archiveArtifacts artifacts: 'package*.json', fingerprint: true
+            }
+        }
+
+        stage('Unit tests') {
+            steps {                
+                sh '''
+                npm start & 
+                APP_PID=$!
+                sleep 5
+                curl -f http://localhost:8080 -o nodejs.html || echo "Failed to fetch page"
+                kill $APP_PID
+                '''
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'nodejs.html', allowEmptyArchive: true
+                }
+            }
+        }
+
+
+        stage('Build Docker image') {
+            steps {
+                sh '''
+                  
+                  docker build -t $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG .
+                  
+                '''
+            }
+        }
+        stage('Push image') {
+            steps {
+                sh '''
+                echo $DOCKER_REGISTRY_CRED_PSW | docker login -u $DOCKER_REGISTRY_CRED_USR -p Assignment21784408
+                docker push $DOCKER_IMAGE_NAME:$DOCKER_IMAGE_TAG 
+                '''
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                script {
+                    def result = build job: 'OWASP-DC', 
+                        parameters: [
+                            string(name: 'APP_NAME', value: 'express-app'),
+                            string(name: 'BRANCH', value: env.BRANCH_NAME)
+                        ],
+                        propagate: true,
+                        wait: true
+                    
+                    copyArtifacts( 
+                        projectName: 'OWASP-DC',
+                        selector: [$class: 'SpecificBuildSelector', buildNumber: "${result.number}"],
+                        filter: 'dependency-check-report.*',
+                        flatten: true
+                    )
+                }
+
+                archiveArtifacts artifacts: 'dependency-check-report.*', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Build aws-elastic-beanstalk-express-js-sample #${env.BUILD_NUMBER} succeeded"
+        }
+        failure {
+            echo "Build aws-elastic-beanstalk-express-js-sample #${env.BUILD_NUMBER} failed"
+        }
+        
+        always {
+            archiveArtifacts artifacts: 'Dockerfile, dependency-check-report.*, **/*.log, nodejs.html', allowEmptyArchive: true
+        }
+    }
+}
