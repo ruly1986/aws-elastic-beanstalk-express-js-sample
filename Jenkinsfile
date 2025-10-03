@@ -6,8 +6,7 @@ pipeline {
         }
     }
     
-    environment {
-        
+    environment {        
         DOCKER_REGISTRY_URL = 'https://index.docker.io/v1/' 
         DOCKER_IMAGE_NAME     = 'rulyw/testass2'            
         DOCKER_IMAGE_TAG        = "build-${env.BUILD_NUMBER}"
