@@ -93,10 +93,10 @@ pipeline {
 
     post {
         success {
-            echo "Build aws-elastic-beanstalk-express-js-sample #${env.BUILD_NUMBER} succeeded"
+            echo "Build aws-elastic-beanstalk-express-js-sample #${env.BUILD_NUMBER} : succeeded"
         }
         failure {
-            echo "Build aws-elastic-beanstalk-express-js-sample #${env.BUILD_NUMBER} failed"
+            echo "Build aws-elastic-beanstalk-express-js-sample #${env.BUILD_NUMBER} : failed"
         }
         
         always {
